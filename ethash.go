@@ -103,7 +103,7 @@ func freeCache(cache *cache) {
 	cache.ptr = nil
 }
 
-func (cache *cache) compute(dagSize uint64, hash common.Hash, nonce uint64) (ok bool, mixDigest, result common.Hash) {
+func (cache *cache) Compute(dagSize uint64, hash common.Hash, nonce uint64) (ok bool, mixDigest, result common.Hash) {
 	ret := C.ethash_light_compute_internal(cache.ptr, C.uint64_t(dagSize), hashToH256(hash), C.uint64_t(nonce))
 	// Make sure cache is live until after the C call.
 	// This is important because a GC might happen and execute
@@ -126,7 +126,7 @@ type Light struct {
 
 // Verify checks whether the block's nonce is valid.
 func (l *Light) Verify(block Block) bool {
-	// TODO: do ethash_quick_verify before getCache in order
+	// TODO: do ethash_quick_verify before GetCache in order
 	// to prevent DOS attacks.
 	blockNum := block.NumberU64()
 	if blockNum >= epochLength*2048 {
@@ -145,13 +145,13 @@ func (l *Light) Verify(block Block) bool {
 		return false
 	}
 
-	cache := l.getCache(blockNum)
+	cache := l.GetCache(blockNum)
 	dagSize := C.ethash_get_datasize(C.uint64_t(blockNum))
 	if l.test {
 		dagSize = dagSizeForTesting
 	}
 	// Recompute the hash using the cache.
-	ok, mixDigest, result := cache.compute(uint64(dagSize), block.HashNoNonce(), block.Nonce())
+	ok, mixDigest, result := cache.Compute(uint64(dagSize), block.HashNoNonce(), block.Nonce())
 	if !ok {
 		return false
 	}
@@ -174,7 +174,11 @@ func hashToH256(in common.Hash) C.ethash_h256_t {
 	return C.ethash_h256_t{b: *(*[32]C.uint8_t)(unsafe.Pointer(&in[0]))}
 }
 
-func (l *Light) getCache(blockNum uint64) *cache {
+func (l *Light) GetDagSize(blockNum uint64) uint64 {
+	return uint64(C.ethash_get_datasize(C.uint64_t(blockNum)))
+}
+
+func (l *Light) GetCache(blockNum uint64) *cache {
 	var c *cache
 	epoch := blockNum / epochLength
 
